@@ -29,7 +29,7 @@ This notebook includes the step 1 & 2 in a ML data pipeline mainly using Pandas 
 
 This folder contains helper class & functions for the data pipeline
 
-### data_cleaner.py
+### [data_cleaner.py](https://github.com/tctsung/data_pipeline_func/blob/main/funcs/data_cleaner.py)
 
 Helper for data preprocessing & information extraction in tabular data
 
