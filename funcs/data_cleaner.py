@@ -96,7 +96,7 @@ def label_encoding(df, encode_cols=None, max_categories=30, as_category=False):
 	:return: inplace operation to input df & return a table that matches origianl labeling & label encoding
 	"""
 	if encode_cols is None:
-		encode_cols = df.select_dtypes(include=['object', 'string']).columns   # default features
+		encode_cols = df.select_dtypes(include='object').columns   # default features
 	max_id = (df[encode_cols].apply(lambda x:len(x.unique())) < max_categories)
 	encode_cols = encode_cols[max_id]   # rm the cols with unique count > max_categories
 	# print(f"Features {encode_cols.tolist()} are transformed from [\'object\', \'string\'] to Int64 labels")
@@ -110,6 +110,7 @@ def label_encoding(df, encode_cols=None, max_categories=30, as_category=False):
 	df[encode_cols] = df[encode_cols].apply(lambda x: pd.factorize(x, sort=True)[0])     # encoded values
 	df[encode_cols] = df[encode_cols].astype('Int64') # int64->Int64; to save nan without turning to float
 	df[encode_cols] = df[encode_cols].replace([-1], np.nan)
+	# if as_category:
 	return labels
 
 def match_cols(df_columns, pattern):
