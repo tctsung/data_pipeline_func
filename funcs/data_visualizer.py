@@ -3,61 +3,79 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.cluster.hierarchy import linkage, leaves_list
-# Visualizer: for exploratory analysis
-def correlation(corr, hc_order=True, save_path=None, **kwargs):
-    """
-    TODO: draw correlation plot order by hierarchical clustering 
-    param corr: the correlation matrix obtained from df.corr()
-    param hc_order: if True, do the clustering and reorder corr matrix
-    param save_path: str, the path & file name to save the plot
-    return correlatin plot obtained from sns.heatmap()
-    """ 
-    if hc_order:   # Calculate hierarchical clustering
-        dendro_row = leaves_list(linkage(corr.values, method='ward'))
-        dendro_col = leaves_list(linkage(corr.values.T, method='ward'))
-        corr = corr.iloc[dendro_row, dendro_col]  # Reorder based on cluster order
-    mask = np.triu(np.ones_like(corr, dtype=bool))  # mask half of the area
-    corr_plt = sns.heatmap(corr, mask=mask, cmap='Blues', **kwargs)   # visualization
-    if save_path:
-    	corr_plt.figure.savefig(save_path,bbox_inches="tight") # bbox_inches: avoid cutoff
-    return corr_plt.figure
-def univariate_dashboard(df, fontsize=None, rotation=0):
-	"""
-	TODO: draw univariate plots for all features; bar plots for categorical, hist+kde for continuous
-	param df: input pandas dataframe
-	param fontsize: font size in x,y-axis; if None default font size will be printed out
-	param rotation: the degree to rotate x-axis labeling
-	"""
-	num_plots = len(df.columns)-1
-	num_cols = min(int(num_plots ** 0.5),4)    # make row no. close to col no.
-	num_rows = (num_plots - 1) // num_cols + 1
-	fig, axes = plt.subplots(num_rows, num_cols, figsize=(num_cols*5, num_rows*4))
-	if fontsize is None:
-	    fontsize = num_cols*5
-	    print(f'Auto font size: {fontsize}')
-	int_cols = df.select_dtypes(include='integer').columns
-	date_cols = df.select_dtypes(include='datetime64').columns
-	axes = axes.flatten()
-	for i, (column, ax) in enumerate(zip(df.columns, axes)):
-	    data = df[column].dropna()
-	    if data.dtype=='float':
-	        sns.histplot(x=data, kde=True, ax=ax)
-	    elif column in int_cols:   # bar plot for categorical data
-	        sns.countplot(x=data, ax=ax) # avoid long x-axis label
-	    elif column in date_cols:
-	        sns.histplot(x=data, kde=True, ax=ax)  # may change
-	    ax.set_xticks(ax.get_xticks())
-	    ax.set_xticklabels(ax.get_xticklabels(), rotation=rotation) # rotate x-axis
-	    ax.set_xlabel(column, fontsize=fontsize)
-	    ax.set_ylabel("", fontsize=fontsize)
-	    ax.tick_params(axis='x', labelsize=fontsize-2)
-	    ax.tick_params(axis='y', labelsize=fontsize-2)
-	plt.tight_layout()  # Adjusts the spacing between subplots
-	plt.show()
-	return fig
-from warnings import warn
-from matplotlib.dates import date2num, num2date
+import missingno as mn       # missing data visualization
+from warnings import warn    
+from matplotlib.dates import date2num, num2date  # transform dtype for plotting datetime
 from pandas.api.types import is_float_dtype, is_categorical_dtype, is_integer_dtype
+# Visualizer: for exploratory analysis
+class Visualizer:
+    def __init__(self, df, key_feature=None, corr=True, univariate=True, bivariate=True, na_pattern=True):
+        assert isinstance(df, pd.DataFrame), "Input data must be a pandas DataFrame."
+        self.df = df
+        self.key_feature = key_feature
+        self.corr = corr
+        self.univariate = univariate
+        self.bivariate = bivariate
+        self.na_pattern = na_pattern
+        self.auto_plots()
+    def __repr__(self):
+        options = ["1. Univariate distributions: `vis.univariate_dashboard(df)`", "2. Bivariate distributions: `vis.bivariate_dashboard(df, key_feature)`", 
+        "3. Correlation plots of continuous variables: `vis.correlation(df.corr())`", "4. Missing data pattern plots: `vis.na_plots(df)`"]
+        options_str = "\n".join(options)
+        return f"Visualizer class with the following plotting options:\n{options_str}"
+    def auto_plots(self):
+        if self.univariate:
+            print('---------------------------')
+            print('Univariate distributions: ')
+            univariate_dashboard(self.df)
+        if self.bivariate:
+            print('---------------------------')
+            print(f'Bivariate distributions using key_feature {self.key_feature}')
+            assert self.key_feature in self.df.columns, f'key_feature {self.key_feature} is not in column names'
+            bivariate_dashboard(self.df, self.key_feature)
+        if self.corr:
+            print('---------------------------')
+            print('Correlation plots using all cols with dtype=\'float\'')
+            corr = self.df.select_dtypes('float').corr()
+            correlation(corr)
+        if self.na_pattern:
+            print('---------------------------')
+            print('heatmap, barplot, correlation plots of missing data pattern')
+            na_plots(self.df)
+def univariate_dashboard(df, fontsize=None, rotation=0):
+    """
+    TODO: draw univariate plots for all features; bar plots for categorical, hist+kde for continuous
+    param df: input pandas dataframe
+    param fontsize: font size in x,y-axis; if None default font size will be printed out
+    param rotation: the degree to rotate x-axis labeling
+    """
+    num_plots = len(df.columns)-1
+    num_cols = min(int(num_plots ** 0.5),4)    # make row no. close to col no.
+    num_rows = (num_plots - 1) // num_cols + 1
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=(num_cols*5, num_rows*4))
+    if fontsize is None:
+        fontsize = num_cols*5
+        print(f'Auto font size: {fontsize}')
+    int_cols = df.select_dtypes(include='integer').columns
+    date_cols = df.select_dtypes(include='datetime64').columns
+    axes = axes.flatten()
+    for i, (column, ax) in enumerate(zip(df.columns, axes)):
+        data = df[column].dropna()
+        if data.dtype=='float':
+            sns.histplot(x=data, kde=True, ax=ax)
+        elif column in int_cols:   # bar plot for categorical data
+            sns.countplot(x=data, ax=ax) # avoid long x-axis label
+        elif column in date_cols:
+            sns.histplot(x=data, kde=True, ax=ax)  # may change
+        ax.set_xticks(ax.get_xticks())
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=rotation) # rotate x-axis
+        ax.set_xlabel(column, fontsize=fontsize)
+        ax.set_ylabel("", fontsize=fontsize)
+        ax.tick_params(axis='x', labelsize=fontsize-2)
+        ax.tick_params(axis='y', labelsize=fontsize-2)
+    plt.tight_layout()  # Adjusts the spacing between subplots
+    plt.show()
+    return fig
 def bivariate_dashboard(df, key_feature, key_dtype=None, stacked=False, fontsize=None):
     """
     TODO: 
@@ -143,3 +161,35 @@ def bivariate_dashboard(df, key_feature, key_dtype=None, stacked=False, fontsize
     plt.tight_layout()  # Adjusts the spacing between subplots
     plt.show()
     return fig
+def na_plots(df):
+    """
+    TODO: visualize the missingness in the data
+    param df: input pandas dataframe
+    """
+    df_na = df.loc[:,df.isna().mean()!=0]  # don't plot the cols with no NaN
+    mn.matrix(df_na, sort='ascending')     # sparkline represent # of missingness in each row
+    plt.show()
+    mn.bar(df_na, sort='ascending')        # no. of data in each feature
+    plt.show()
+    mn.heatmap(df_na)                      # nullity correlation
+    plt.show()
+
+def correlation(corr, hc_order=True, save_path=None, **kwargs):
+    """
+    TODO: draw correlation plot order by hierarchical clustering 
+    param corr: the correlation matrix obtained from df.corr()
+    param hc_order: if True, do the clustering and reorder corr matrix
+    param save_path: str, the path & file name to save the plot
+    return correlatin plot obtained from sns.heatmap()
+    """ 
+    if hc_order:   # Calculate hierarchical clustering
+        dendro_row = leaves_list(linkage(corr.values, method='ward'))
+        dendro_col = leaves_list(linkage(corr.values.T, method='ward'))
+        corr = corr.iloc[dendro_row, dendro_col]  # Reorder based on cluster order
+    mask = np.triu(np.ones_like(corr, dtype=bool))  # mask half of the area
+    corr_plt = sns.heatmap(corr, mask=mask, cmap='Blues', **kwargs)   # visualization
+    if save_path:
+    	corr_plt.figure.savefig(save_path,bbox_inches="tight") # bbox_inches: avoid cutoff
+    plt.show()
+    return corr_plt.figure
+
