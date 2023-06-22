@@ -4,12 +4,13 @@ Demo for self-written data cleaning, EDA, ML, DL functions in python &amp; R
 0. Define the problem & collect data
 1. Overview of the data 
   * goal: understand the str, size, basic info
-  * Ex. tabular data ([preprocess.ipynb](https://github.com/tctsung/data_pipeline_func/blob/main/preprocess.ipynb))
+  * Eg. tabular data ([preprocess.ipynb](https://github.com/tctsung/data_pipeline_func/blob/main/preprocess.ipynb))
 2. Data preprocessing 
   * goal: transform to proper dtypes, extract features
-  * Ex. tabular data ([preprocess.ipynb](https://github.com/tctsung/data_pipeline_func/blob/main/preprocess.ipynb))
-3. Exploratory data analysis
+  * Eg. tabular data ([preprocess.ipynb](https://github.com/tctsung/data_pipeline_func/blob/main/preprocess.ipynb))
+3. Exploratory data analysis 
   * goal: visualize distribution, missingness, relationships betweeen features & with main outcome
+  * Eg. tabular data ([EDA.ipynb](https://github.com/tctsung/data_pipeline_func/blob/main/EDA.ipynb))
 4. Baseline Model
   * goal: see if the problem is feasible & evaluation criterion is reasonable
 5. Model optimization
@@ -23,7 +24,11 @@ Demo for self-written data cleaning, EDA, ML, DL functions in python &amp; R
 ## Notebooks
 
 ### preprocess.ipynb
-This notebook includes the step 1 & 2 in a ML data pipeline mainly using Pandas & self-written functions `data_cleaner.py`
+This notebook includes the step 1 & 2 in a ML data pipeline mainly using Pandas & self-written OOP [data_cleaner.py](https://github.com/tctsung/data_pipeline_func/blob/main/funcs/data_cleaner.py)
+
+### EDA.ipynb
+
+This notebook includes the exploratory data analysis for tabular data mainly using seaborn, matplotlib & self-written OOP [data_visualizer.py](https://github.com/tctsung/data_pipeline_func/blob/main/funcs/data_visualizer.py)
 
 ## funcs
 
