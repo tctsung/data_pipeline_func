@@ -17,10 +17,10 @@ class Visualizer:
         self.univariate = univariate
         self.bivariate = bivariate
         self.na_pattern = na_pattern
-        self.auto_plots()
+        print(self.__repr__())
     def __repr__(self):
-        options = ["1. Univariate distributions: `vis.univariate_dashboard(df)`", "2. Bivariate distributions: `vis.bivariate_dashboard(df, key_feature)`", 
-        "3. Correlation plots of continuous variables: `vis.correlation(df.corr())`", "4. Missing data pattern plots: `vis.na_plots(df)`"]
+        options = [f"1. Univariate distributions using `vis.univariate_dashboard(df)`: {self.univariate}", f"2. Bivariate distributions using `vis.bivariate_dashboard(df, key_feature)`: {self.bivariate}", 
+        f"3. Correlation plots for continuous variables using `vis.correlation(df.corr())`: {self.corr}", f"4. Missing data pattern plots using `vis.na_plots(df)`: {self.na_pattern}"]
         options_str = "\n".join(options)
         return f"Visualizer class with the following plotting options:\n{options_str}"
     def auto_plots(self):
@@ -31,7 +31,7 @@ class Visualizer:
         if self.bivariate:
             print('---------------------------')
             print(f'Bivariate distributions using key_feature {self.key_feature}')
-            assert self.key_feature in self.df.columns, f'key_feature {self.key_feature} is not in column names'
+            assert self.key_feature in self.df.columns, f'Must defince key_feature for bivariate plots. feature {self.key_feature} is not in column names'
             bivariate_dashboard(self.df, self.key_feature)
         if self.corr:
             print('---------------------------')
@@ -42,7 +42,7 @@ class Visualizer:
             print('---------------------------')
             print('heatmap, barplot, correlation plots of missing data pattern')
             na_plots(self.df)
-def univariate_dashboard(df, fontsize=None, rotation=0):
+def univariate_dashboard(df, fontsize=None, rotation=-30):
     """
     TODO: draw univariate plots for all features; bar plots for categorical, hist+kde for continuous
     param df: input pandas dataframe
@@ -148,7 +148,7 @@ def bivariate_dashboard(df, key_feature, key_dtype=None, stacked=False, fontsize
                 sns.violinplot(x=key_feature, y=column, data=data, ax=ax)
             elif column in categorical_cols: # count plot for Y in each categorical X
                 pd.crosstab(df[key_feature], df[column]).plot(kind='bar', stacked=stacked, ax=ax)
-                ax.set_xticklabels(ax.get_xticklabels(), rotation=0) 
+                ax.set_xticklabels(ax.get_xticklabels(), rotation=30) 
                 if len(df[column].unique())>10:  # rm legend if too many gps
                     ax.legend().remove()
             ax.set_xticks(ax.get_xticks())
