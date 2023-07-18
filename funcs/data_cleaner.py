@@ -1,12 +1,19 @@
 import pandas as pd
+import polars as pl
 import numpy as np
 import random as r
 import re
-from sklearn.preprocessing import StandardScaler
+from collections import Counter  # count list ele frequency
 import pickle
 ## classes:
-# Cleaner: for tabular data
-# Visualizer: for exploratory analysis
+# class Feature_extractor:
+# 	"""
+# 	TODO: for automatic feature extraction
+# 	"""
+# 	def __init__(self, df, key_feature=None, corr=True, univariate=True, bivariate=True, na_pattern=True):
+
+
+# Cleaner: force auto-cleaning for data
 class Cleaner:
 	"""
 	For automatic data cleaning
@@ -46,31 +53,25 @@ class Cleaner:
 		self.rm_na_cols(na_percentage)     # drop cols with missingness > na_percentage
 		self.binary_to_int()               # turn binary variables to integer
 		self.fix_colname()                 # rm weird symbols from column names
-def overview(df):
-	"""
-	Check the data types & NA percentage & unique values of the data
-	"""
-	print(f'size: {df.shape}')
-	output = df.apply(lambda x: (x.dtype,x.isna().mean(),len(x.unique()),x.unique()), axis=0).T
-	output.columns = ["dtype", "NaN_percentage","unique_cnt","unique"]
-	print(f'Data types:\n{output.dtype.value_counts()}')
-	return output.sort_values(['NaN_percentage','unique_cnt'], ascending=False)
+
 ## Data preprocessing & feature extraction:
-def extract_date_features(df, col, date_format='%Y-%m-%d', label=None):
+def extract_date_features(df):
 	"""
 	TODO: extract features from a date feature
 	:param df: input data frame for inplace operation
 	:param col: name of the date columns
-	:param date_format: format of the date feature
 	:param label: labeling for the extracted features
 	"""
-	if label is None:   # use the ori name as label
-	    label = col
-	df[col] = pd.to_datetime(df[col], format=date_format)
-	df['yr_'+label] = df[col].dt.year
-	df['mo_'+label] = df[col].dt.month
-	df['day_'+label] = df[col].dt.day
-	df['wday_'+label] = df[col].dt.weekday
+	datetime_cols = df.select_dtypes(include='datetime').columns.tolist()
+	print(f'Extract yr, month, day, wday features from column: {datetime_cols}')
+	if len(datetime_cols)==0:
+		print('No dtype=datetime feature, will not perform extract_date_features function.\nTurn the datetime columns to dtype=datetime before feature extraction')
+	else:
+		for col in datetime_cols:
+			df['yr_'+col] = df[col].dt.year
+			df['mo_'+col] = df[col].dt.month
+			df['day_'+col] = df[col].dt.day
+			df['wday_'+col] = df[col].dt.weekday
 def standardization(df, method='normalize', cols=None):
 	"""
 	TODO: Standardization for numeric features
@@ -112,16 +113,12 @@ def label_encoding(df, encode_cols=None, max_categories=30, as_category=False):
 	df[encode_cols] = df[encode_cols].replace([-1], np.nan)
 	# if as_category:
 	return labels
+def transform_datetime(df, cols, format='%Y-%m-%d'):
+	"""
+	TODO: transform a list of columns to datetime dtype
+	"""
+	df[cols] = df[cols].apply(lambda x:pd.to_datetime(x,format=format))
 
-def match_cols(df_columns, pattern):
-	"""
-	TODO: keep the cols that matches regex patterns
-	:param df: input data
-	:param pattern: r""; re pattern for re.match()
-	return: matched features idx
-	"""
-	matched_cols = df_columns[df_columns.str.match(pattern)]
-	return matched_cols
 
 def save_py(obj, location):
 	"""
@@ -140,8 +137,48 @@ def load_py(location):
 	return data
 
 
-
-
-
+## Helper for checking data information:
+def match_cols(df_columns, pattern):
+	"""
+	TODO: keep the cols that matches regex patterns
+	:param df: input data
+	:param pattern: r""; re pattern for re.match()
+	return: matched features idx
+	"""
+	matched_cols = df_columns[df_columns.str.match(pattern)]
+	return matched_cols
+def unique_values(col,n):
+    """
+    TODO: return a list of unique values from a polars series
+    param col: a polars series
+    param n: max len of return list
+    """
+    unique_values = col.unique().cast(pl.Utf8)
+    if len(unique_values) > n:
+        unique_values = unique_values.sample(n)
+    output = ", ".join(unique_values.to_list())
+    return output
+def overview(df, n=5):
+    '''
+    TODO: Get some basic information of a polars/pandas dataframe
+    param n: max unique values to return in each feature
+    '''
+    print(f'Data dimension: {df.shape}')
+    print(f'Data types: {Counter(df.dtypes)}')
+    if isinstance(df,pl.DataFrame):
+        output = pl.DataFrame(
+            {'variable':df.columns,
+             'dtype':df.dtypes,
+             'NA_count':df.select(pl.all().map(lambda x:x.null_count())).transpose().to_series(),
+             # 'NA percentage':df.select(pl.all().map(lambda x:x.is_null().mean())).transpose().to_series(),
+             'unique_cnt':df.select(pl.all().n_unique()).transpose().to_series(),
+             'examples':df.select(pl.all().map(lambda x:unique_values(x,n))).transpose().to_series()
+            })
+        display(output)
+    elif isinstance(df,pd.DataFrame):
+        output = df.apply(lambda x: (x.dtype,x.isna().sum(),len(x.unique()),x.unique()), axis=0).T
+        output.columns = ["dtype", "NA_count","unique_cnt","examples"]
+        display(output)
+    return output
 
 
