@@ -158,7 +158,7 @@ def unique_values(col,n):
         unique_values = unique_values.sample(n)
     output = ", ".join(unique_values.to_list())
     return output
-def overview(df, n=5):
+def overview(df, head=True, n=5):
     '''
     TODO: Get some basic information of a polars/pandas dataframe
     param n: max unique values to return in each feature
@@ -169,16 +169,38 @@ def overview(df, n=5):
         output = pl.DataFrame(
             {'variable':df.columns,
              'dtype':df.dtypes,
-             'NA_count':df.select(pl.all().map(lambda x:x.null_count())).transpose().to_series(),
+             'n_NA':df.select(pl.all().map(lambda x:x.null_count())).transpose().to_series(),
              # 'NA percentage':df.select(pl.all().map(lambda x:x.is_null().mean())).transpose().to_series(),
-             'unique_cnt':df.select(pl.all().n_unique()).transpose().to_series(),
+             'n_unique':df.select(pl.all().n_unique()).transpose().to_series(),
              'examples':df.select(pl.all().map(lambda x:unique_values(x,n))).transpose().to_series()
             })
         display(output)
     elif isinstance(df,pd.DataFrame):
         output = df.apply(lambda x: (x.dtype,x.isna().sum(),len(x.unique()),x.unique()), axis=0).T
-        output.columns = ["dtype", "NA_count","unique_cnt","examples"]
+        output.columns = ["dtype", "NA_count","n_unique","examples"]
         display(output)
+    if head:
+    	display(df.head())
     return output
-
+def auto_dtype(df, max_unique=10):
+    """
+    TODO: Identify whether a feature is continuous/categorical variable 
+    Note: will not change any dtypes
+    param max_unique: max unique groups within the variable to be considered as categorical
+    return: a dictionary of {'categorical':[list of colnames], 'continuous':[], 'temporal':[]}
+    """
+    assert isinstance(df, pl.DataFrame), "Input data must be a polars DataFrame."
+    dct = {}
+    n_unique = df.select(pl.all().n_unique()).transpose().to_series().to_list()
+    for (unique_cnt, dtype, col) in zip(n_unique, df.dtypes, df.columns):
+        if dtype in ('Categorical', 'Utf8'):
+            dct['categorical'].append(col)
+        elif dtype in pl.NUMERIC_DTYPES:   # float | int
+            if unique_cnt < max_unique:
+                dct['categorical'] = dct.get('categorical', []) + [col]
+            else:
+                dct['continuous'] = dct.get('continuous', []) + [col]
+        elif dtype in pl.TEMPORAL_DTYPES:
+            dct['temporal'] = dct.get('temporal', []) + [col]
+    return dct
 

@@ -7,8 +7,19 @@ import missingno as mn       # missing data visualization
 from warnings import warn    
 from matplotlib.dates import date2num, num2date  # transform dtype for plotting datetime
 from pandas.api.types import is_float_dtype, is_categorical_dtype, is_integer_dtype
-# Visualizer: for exploratory analysis
+import data_cleaner as dc
+
+# class Raw_Visualizer:
+    """
+    TODO: Data visualization for raw data
+    Data is plotted based on no. of groups
+    """
+
 class Visualizer:
+    """
+    TODO: Data visualization for cleaned data
+    note: col dtypes should be integer, float, or datatime
+    """
     def __init__(self, df, key_feature=None, corr=True, univariate=True, bivariate=True, na_pattern=True):
         assert isinstance(df, pd.DataFrame), "Input data must be a pandas DataFrame."
         self.df = df
@@ -19,8 +30,8 @@ class Visualizer:
         self.na_pattern = na_pattern
         print(self.__repr__())
     def __repr__(self):
-        options = [f"1. Univariate distributions using `vis.univariate_dashboard(df)`: {self.univariate}", f"2. Bivariate distributions using `vis.bivariate_dashboard(df, key_feature)`: {self.bivariate}", 
-        f"3. Correlation plots for continuous variables using `vis.correlation(df.corr())`: {self.corr}", f"4. Missing data pattern plots using `vis.na_plots(df)`: {self.na_pattern}"]
+        options = [f"1. Univariate distributions using `data_visualizer.univariate_dashboard(df)`: {self.univariate}", f"2. Bivariate distributions using `data_visualizer.bivariate_dashboard(df, key_feature)`: {self.bivariate}", 
+        f"3. Correlation plots for continuous variables using `data_visualizer.correlation(df.corr())`: {self.corr}", f"4. Missing data pattern plots using `data_visualizer.na_plots(df)`: {self.na_pattern}"]
         options_str = "\n".join(options)
         return f"Visualizer class with the following plotting options:\n{options_str}"
     def auto_plots(self):
@@ -182,6 +193,7 @@ def correlation(corr, hc_order=True, save_path=None, **kwargs):
     param save_path: str, the path & file name to save the plot
     return correlatin plot obtained from sns.heatmap()
     """ 
+    check_corr(corr)   # check whether there are values with corr=1 or -1
     if hc_order:   # Calculate hierarchical clustering
         dendro_row = leaves_list(linkage(corr.values, method='ward'))
         dendro_col = leaves_list(linkage(corr.values.T, method='ward'))
@@ -192,4 +204,12 @@ def correlation(corr, hc_order=True, save_path=None, **kwargs):
     	corr_plt.figure.savefig(save_path,bbox_inches="tight") # bbox_inches: avoid cutoff
     plt.show()
     return corr_plt.figure
-
+def check_corr(df):
+    corr = df.select_dtypes('number').corr().abs()
+    np.fill_diagonal(corr.values, np.nan)
+    row_idx, col_idx = np.where(np.isclose(corr.values, 1))
+    lens = len(row_idx)//2
+    if lens>0:
+        warn('There are features with absolute correlation==1:')
+        for x,y in zip(row_idx[:lens], col_idx[:lens]):
+            warn(f'{corr.index[x]} & {corr.index[y]}')
