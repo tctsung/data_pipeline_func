@@ -190,17 +190,24 @@ def auto_dtype(df, max_unique=10):
     return: a dictionary of {'categorical':[list of colnames], 'continuous':[], 'temporal':[]}
     """
     assert isinstance(df, pl.DataFrame), "Input data must be a polars DataFrame."
-    dct = {}
+    dct, table = {}, {}
     n_unique = df.select(pl.all().n_unique()).transpose().to_series().to_list()
     for (unique_cnt, dtype, col) in zip(n_unique, df.dtypes, df.columns):
-        if dtype in ('Categorical', 'Utf8'):
-            dct['categorical'].append(col)
+        if dtype in (pl.Categorical, pl.Utf8):
+            dct[col] = 'categorical'
+            table['categorical'] = table.get('categorical', []) + [col]
         elif dtype in pl.NUMERIC_DTYPES:   # float | int
             if unique_cnt < max_unique:
-                dct['categorical'] = dct.get('categorical', []) + [col]
+                dct[col] = 'categorical'
+                table['categorical'] = table.get('categorical', []) + [col]
             else:
-                dct['continuous'] = dct.get('continuous', []) + [col]
+                dct[col] = 'continuous'
+                table['continuous'] = table.get('continuous', []) + [col]
         elif dtype in pl.TEMPORAL_DTYPES:
-            dct['temporal'] = dct.get('temporal', []) + [col]
+            dct[col] = 'temporal'
+            table['temporal'] = table.get('temporal', []) + [col]
+        else:   # cannot be identified in any group
+            raise ValueError(f'Variable {col} cannot be identified. Turn dtype into 1 of the following:\npl.Categorical, pl.Utf8, pl.TEMPORAL_DTYPES, pl.NUMERIC_DTYPES')
+    print(f'According to function `dc.auto_dtype()`, the variables are grouped as follows:\n{table}')
     return dct
 
