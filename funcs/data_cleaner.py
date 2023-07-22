@@ -207,7 +207,9 @@ def auto_dtype(df, max_unique=10):
             dct[col] = 'temporal'
             table['temporal'] = table.get('temporal', []) + [col]
         else:   # cannot be identified in any group
-            raise ValueError(f'Variable {col} cannot be identified. Turn dtype into 1 of the following:\npl.Categorical, pl.Utf8, pl.TEMPORAL_DTYPES, pl.NUMERIC_DTYPES')
+        	table['unknown'] = table.get('unknown', []) + [col]
+        if 'unknown' in table:
+            raise ValueError(f"Variable(s) {table['unknown']} cannot be identified. Turn dtype into 1 of the following:\npl.Categorical, pl.Utf8, pl.TEMPORAL_DTYPES, pl.NUMERIC_DTYPES")
     print(f'According to function `dc.auto_dtype()`, the variables are grouped as follows:\n{table}')
     return dct
 

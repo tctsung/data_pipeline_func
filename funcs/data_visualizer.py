@@ -1,4 +1,5 @@
 import pandas as pd
+import polars as pl
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -8,13 +9,6 @@ from warnings import warn
 from matplotlib.dates import date2num, num2date  # transform dtype for plotting datetime
 from pandas.api.types import is_float_dtype, is_categorical_dtype, is_integer_dtype
 import data_cleaner as dc
-
-# class Raw_Visualizer:
-    """
-    TODO: Data visualization for raw data
-    Data is plotted based on no. of groups
-    """
-
 class Visualizer:
     """
     TODO: Data visualization for cleaned data
@@ -53,122 +47,97 @@ class Visualizer:
             print('---------------------------')
             print('heatmap, barplot, correlation plots of missing data pattern')
             na_plots(self.df)
-def univariate_dashboard(df, fontsize=None, rotation=-30):
+def univariate_dashboard(df, max_unique=10, fontsize=None, rotation=-30):
     """
     TODO: draw univariate plots for all features; bar plots for categorical, hist+kde for continuous
-    param df: input pandas dataframe
+    param df: input polars dataframe
+    param max_unique: max unique groups to be considered as categorical; pass to dc.auto_dtype()
     param fontsize: font size in x,y-axis; if None default font size will be printed out
     param rotation: the degree to rotate x-axis labeling
     """
-    num_plots = len(df.columns)-1
+    dtypes = dc.auto_dtype(df, max_unique)
+    num_plots = df.shape[1]
     num_cols = min(int(num_plots ** 0.5),4)    # make row no. close to col no.
     num_rows = (num_plots - 1) // num_cols + 1
     fig, axes = plt.subplots(num_rows, num_cols, figsize=(num_cols*5, num_rows*4))
     if fontsize is None:
         fontsize = num_cols*5
         print(f'Auto font size: {fontsize}')
-    int_cols = df.select_dtypes(include='integer').columns
-    date_cols = df.select_dtypes(include='datetime64').columns
     axes = axes.flatten()
-    for i, (column, ax) in enumerate(zip(df.columns, axes)):
-        data = df[column].dropna()
-        if data.dtype=='float':
+    df = df.to_pandas()
+    for (col, ax) in zip(df.columns, axes):        # zip will loop until 1 out of idx
+        data = df[col].dropna()
+        dtype = dtypes[col]                        # categorical/continuous/temporal
+        if dtype=='continuous':                    # histogram + density for continuous
             sns.histplot(x=data, kde=True, ax=ax)
-        elif column in int_cols:   # bar plot for categorical data
-            sns.countplot(x=data, ax=ax) # avoid long x-axis label
-        elif column in date_cols:
-            sns.histplot(x=data, kde=True, ax=ax)  # may change
+        elif dtype=='categorical':                 # bar plot for categorical data
+            sns.countplot(x=data, ax=ax)           # avoid long x-axis label
+        else:                                      # dtype=='temporal'
+            sns.histplot(x=data, kde=True, ax=ax)  # may change in the future
         ax.set_xticks(ax.get_xticks())
         ax.set_xticklabels(ax.get_xticklabels(), rotation=rotation) # rotate x-axis
-        ax.set_xlabel(column, fontsize=fontsize)
+        ax.set_xlabel(col, fontsize=fontsize)
         ax.set_ylabel("", fontsize=fontsize)
         ax.tick_params(axis='x', labelsize=fontsize-2)
         ax.tick_params(axis='y', labelsize=fontsize-2)
-    plt.tight_layout()  # Adjusts the spacing between subplots
+    plt.tight_layout()                             # Adjust spacing between subplots
     plt.show()
     return fig
-def bivariate_dashboard(df, key_feature, key_dtype=None, stacked=False, fontsize=None):
+def bivariate_dashboard(df, key_feature, max_unique=10, stacked=False, fontsize=None):
     """
     TODO: 
     param df: input pandas dataframe
     param key_feature: the feature to include in every bivariate plot (usually the outcome variable); must be int, float, or categorical
-    param key_dtype: dtype of key_feature, should be ('continuous', 'categorical'); if None, auto detection will be operate
-    param stacked: if True, stack the categorical vs. categorical barplot
+    param stacked: if True, show the proportion instead of count in categorical vs. categorical barplot
     param fontsize: font size in x,y-axis; if None default font size will be printed out
     """
-    key_dtypes = (None, 'continuous', 'categorical')
-    assert key_dtype in key_dtypes, f"Invalid value for 'key_dtype' parameter. Expected one of: {key_dtypes}"
-    ori_dtype = df[key_feature].dtype
-    assert is_categorical_dtype(ori_dtype)+is_float_dtype(ori_dtype)+is_integer_dtype(ori_dtype)==1, f"dtype of key_feature must be float, int, or categorical"
-    categories = len(df[key_feature].unique())
+    key_dtype = df[key_feature].dtype
+    assert ((key_dtype==pl.Categorical) or (key_dtype in pl.NUMERIC_DTYPES)), f"dtype of key_feature must be float, int, or categorical"
+    dtypes = dc.auto_dtype(df, max_unique)       # to decide type of biplot
     # check key_feature dtype:
-    if key_dtype is None:
-        if is_float_dtype(ori_dtype):  # treat float as continuous Y
-            key_dtype='continuous'
-            print(f'key_feature {key_feature} is treated as continuous variable due to dtype=\'float\'')
-            if categories < 10:
-                warn(f'There are only {categories} unique values in key_feature, change arg key_dtype=\'categorical\' if it\'s not a continuous variable')
-        elif (categories > 30) and is_integer_dtype(ori_dtype):
-            key_dtype='continuous'
-            print(f'key_feature {key_feature} is treated as continuous variable since unique categories > 30\nChange arg key_dtype=\'categorical\' if it\'s not a continuous variable')
-        else:
-            key_dtype='categorical'
-            print(f'key_feature {key_feature} is treated as categorical variable due to dtype={ori_dtype}')
-            df[key_feature] = df[key_feature].astype('category') # temp transfer for plotting
-            if categories > 10: 
-                warn(f'There are {categories} unique values in key_feature, change arg key_dtype=\'continuous\' if it\'s not a categorical variable')
-            elif categories > 30:
-                warn(f'Stop because there are >30 categories in key_feature with dtype={ori_dtype}, change key_dtype to \'categorical\' if you want to force it to make biplots with this amount of categories ')
-                return
-    # setup
-    num_plots = len(df.columns)-1       # -1 because key_feature
-    num_cols = min(int(num_plots ** 0.5), 4)    # make row no. close to col no.
+    key_dtype = dtypes[key_feature]
+    # plot setup
+    num_plots = len(df.columns)-1                # -1 because key_feature
+    num_cols = min(int(num_plots ** 0.5), 4)     # make row no. close to col no.
     num_rows = (num_plots - 1) // num_cols + 1
     fig, axes = plt.subplots(num_rows, num_cols, figsize=(num_cols*5, num_rows*4))
-    # visualization:
     if fontsize is None:
         fontsize = num_cols*5
         print(f'Auto font size: {fontsize}')
-    # group variables to continuous & categorical:
-    categorical_cols = df.select_dtypes(include=['integer', 'category', 'object']).columns
-    continuous_cols = df.select_dtypes(include=['float', 'datetime64']).columns
-    date_cols = df.select_dtypes(include=['datetime64']).columns
-    ori_date_cols = df[date_cols].copy()
-    df[date_cols] = df[date_cols].apply(date2num)
     axes = axes.flatten()
-    if key_dtype=='continuous':
-        for i, (column, ax) in enumerate(zip(set(df.columns) - set(key_feature), axes)):
-            data=df[[key_feature,column]].dropna()
-            if column==key_feature:          # histogram for key_feature
-                sns.histplot(x=df[key_feature].dropna(), kde=True, ax=ax)
-            elif column in continuous_cols:  # scatter plot for continuous X & Y
-                sns.regplot(x=column, y=key_feature, scatter=True,line_kws={"color": "orange"}, data=data, ax=ax)
-            elif column in categorical_cols: # violin plot for categorical X
-                sns.violinplot(x=column, y=key_feature, data=data, ax=ax)
-            ax.set_xticks(ax.get_xticks())
-            ax.set_xlabel(column, fontsize=fontsize)
+    df = df.to_pandas()
+    features = df.columns.to_list()
+    features.remove(key_feature)                 # skip when col==key_feature
+    # Visualization:
+    for (col, ax) in zip(features, axes):  
+        data=df[[key_feature,col]].dropna()      # rm missing data
+        dtype = dtypes[col]                      # check 2nd variable is categorical/continuous/temporal
+        if key_dtype=='continuous':          
+            if dtype=='continuous':              # scatter plot for continuous X & Y
+                # sns.scatterplot(x=col, y=key_feature, data=data, ax=ax)  # failed
+                # sns.regplot(x=col, y=key_feature, data=data, ax=ax)      # failed
+                data.plot.scatter(key_feature, col, ax=ax)
+            elif dtype=='categorical':           # violin plot for categorical X vs. continuous Y
+                sns.violinplot(x=col, y=key_feature, data=data, ax=ax)
+            else:                                # temporal x & 
+                pass
+            ax.set_xlabel(col, fontsize=fontsize)
             ax.set_ylabel(key_feature, fontsize=fontsize)
-            ax.tick_params(axis='x', labelsize=fontsize-2)
-            ax.tick_params(axis='y', labelsize=fontsize-2)
-    elif key_dtype=='categorical':
-        for i, (column, ax) in enumerate(zip(df.columns, axes)):
-            data=df[[key_feature,column]].dropna()
-            if column==key_feature:
-                sns.countplot(x=df[key_feature].dropna(), ax=ax)
-            elif column in continuous_cols:  # violin plot for continuous X & categorical Y
-                sns.violinplot(x=key_feature, y=column, data=data, ax=ax)
-            elif column in categorical_cols: # count plot for Y in each categorical X
-                pd.crosstab(df[key_feature], df[column]).plot(kind='bar', stacked=stacked, ax=ax)
+        elif key_dtype=='categorical':
+            if dtype=='continuous':              # violin plot for continuous X vs. categorical Y
+                sns.violinplot(x=key_feature, y=col, data=data, ax=ax)
+            elif dtype=='categorical':           # count plot for Y in each categorical X
+                pd.crosstab(df[key_feature], df[col], normalize='index').plot(kind='bar', stacked=stacked, ax=ax)
                 ax.set_xticklabels(ax.get_xticklabels(), rotation=30) 
-                if len(df[column].unique())>10:  # rm legend if too many gps
+                if len(df[col].unique())>10:  # rm legend if too many gps
                     ax.legend().remove()
-            ax.set_xticks(ax.get_xticks())
+            else:    # temporal x
+                pass
             ax.set_xlabel(key_feature, fontsize=fontsize)
-            ax.set_ylabel(column, fontsize=fontsize)
-            ax.tick_params(axis='x', labelsize=fontsize-2)
-            ax.tick_params(axis='y', labelsize=fontsize-2)
-    df[key_feature] = df[key_feature].astype(ori_dtype) # transform back to original dtype
-    df[date_cols] = ori_date_cols  # transform back to date format
+            ax.set_ylabel(col, fontsize=fontsize)
+        ax.set_xticks(ax.get_xticks())
+        ax.tick_params(axis='x', labelsize=fontsize-2)
+        ax.tick_params(axis='y', labelsize=fontsize-2)
     plt.tight_layout()  # Adjusts the spacing between subplots
     plt.show()
     return fig
